@@ -19,7 +19,9 @@ use Composer\IO\NullIO;
 use Composer\Package\CompletePackage;
 use Composer\Package\Link;
 use Composer\Package\Package;
+use Composer\DependencyResolver\Pool;
 use Composer\Repository\ArrayRepository;
+use Composer\Semver\Constraint\Constraint;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Output\NullOutput;
 
@@ -28,10 +30,7 @@ use Symfony\Component\Console\Output\NullOutput;
  */
 class PackageSelectionTest extends TestCase
 {
-    /**
-     * @return array
-     */
-    public function dataGetPackages()
+    public function dataGetPackages(): array
     {
         $emptyRepo = new ArrayRepository();
         $vendorRepo = new ArrayRepository();
@@ -87,12 +86,8 @@ class PackageSelectionTest extends TestCase
 
     /**
      * @dataProvider dataGetPackages
-     *
-     * @param array $expected
-     * @param array $filter
-     * @param ArrayRepository $repository
      */
-    public function testGetPackages($expected, $filter, $repository)
+    public function testGetPackages(array $expected, array $filter, ArrayRepository $repository)
     {
         $builder = new PackageSelection(new NullOutput(), 'build', [], false);
         if (!empty($filter)) {
@@ -106,10 +101,7 @@ class PackageSelectionTest extends TestCase
         $this->assertSame($expected, $method->invokeArgs($builder, [$repository]));
     }
 
-    /**
-     * @return array
-     */
-    public function dataGetRequired()
+    public function dataGetRequired(): array
     {
         $package = new Package('vendor/name', '1.0.0.0', '1.0');
         $link = new Link('test', 'name');
@@ -152,13 +144,8 @@ class PackageSelectionTest extends TestCase
 
     /**
      * @dataProvider dataGetRequired
-     *
-     * @param array $expected
-     * @param Package $package
-     * @param bool $requireDependencies
-     * @param bool $requireDevDependencies
      */
-    public function testGetRequired($expected, $package, $requireDependencies, $requireDevDependencies)
+    public function testGetRequired(array $expected, Package $package, bool $requireDependencies, bool $requireDevDependencies)
     {
         $builder = new PackageSelection(new NullOutput(), 'build', [], false);
 
@@ -177,10 +164,7 @@ class PackageSelectionTest extends TestCase
         $this->assertSame($expected, $method->invokeArgs($builder, [$package, true]));
     }
 
-    /**
-     * @return array
-     */
-    public function dataSetSelectedAsAbandoned()
+    public function dataSetSelectedAsAbandoned(): array
     {
         $package = new CompletePackage('vendor/name', '1.0.0.0', '1.0');
         $packageAbandoned1 = new CompletePackage('vendor/name', '1.0.0.0', '1.0');
@@ -210,11 +194,8 @@ class PackageSelectionTest extends TestCase
 
     /**
      * @dataProvider dataSetSelectedAsAbandoned
-     *
-     * @param array $expected
-     * @param array $config
      */
-    public function testSetSelectedAsAbandoned($expected, $config)
+    public function testSetSelectedAsAbandoned(array $expected, array $config)
     {
         $package = new CompletePackage('vendor/name', '1.0.0.0', '1.0');
 
@@ -235,19 +216,77 @@ class PackageSelectionTest extends TestCase
         $this->assertEquals($expected, $property->getValue($builder));
     }
 
+    public function dataPruneBlacklisted(): array
+    {
+        $package0 = new Package('vendor/name', '1.0.0.0', '1.0');
+        $package1 = new Package('vendor/name', '1.1.0.0', '1.1');
+        $package2 = new Package('vendor/name', '1.2.0.0', '1.2');
+        $packageOther = new Package('vendor/other', '1.0.0.0', '1.0');
+
+        $data = [];
+        $selected = [$package0, $package1, $package2, $packageOther];
+
+        $data['Blacklist Whole Project'] = [
+            [$packageOther],
+            $selected,
+            ['vendor/name' => '*'],
+        ];
+
+        $data['Blacklist One Package'] = [
+            [$package0, $package2, $packageOther],
+            $selected,
+            ['vendor/name' => '1.1'],
+        ];
+
+        $data['Blacklist Newer Packages'] = [
+            [$package0, $package1, $packageOther],
+            $selected,
+            ['vendor/name' => '>1.1'],
+        ];
+
+        return $data;
+    }
+
     /**
-     * @return array
+     * @dataProvider dataPruneBlacklisted
      */
-    public function dataSelect()
+    public function testPruneBlacklisted(array $expected, array $selected, array $config)
+    {
+        $pool = new Pool();
+        $builder = new PackageSelection(new NullOutput(), 'build', [
+            'blacklist' => $config,
+        ], false);
+        $reflection = new \ReflectionClass(get_class($builder));
+
+        $property = $reflection->getProperty('selected');
+        $property->setAccessible(true);
+        $property->setValue($builder, $selected);
+
+        $method = $reflection->getMethod('pruneBlacklisted');
+        $method->setAccessible(true);
+        $method->invokeArgs($builder, [$pool, false]);
+
+        $this->assertEquals(array_values($expected), array_values($property->getValue($builder)));
+    }
+
+    public function dataSelect(): array
     {
         $packages = [
             'alpha' => [
                 'name' => 'vendor/project-alpha',
                 'version' => '1.2.3.0',
             ],
+            'alpha-dev' => [
+                'name' => 'vendor/project-alpha',
+                'version' => '1.2.3.1-dev',
+            ],
             'beta' => [
                 'name' => 'vendor/project-beta',
                 'version' => '1.2.3.0',
+            ],
+            'beta-dev' => [
+                'name' => 'vendor/project-beta',
+                'version' => '1.2.3.1-dev',
             ],
             'gamma1' => [
                 'name' => 'vendor/project-gamma',
@@ -344,6 +383,7 @@ class PackageSelectionTest extends TestCase
                 $packages['gamma4'],
             ],
             [
+                'minimum-stability' => 'stable',
                 'repositories' => [
                     $repo['everything'],
                 ],
@@ -361,6 +401,7 @@ class PackageSelectionTest extends TestCase
                 $packages['gamma1'],
             ],
             [
+                'minimum-stability' => 'stable',
                 'repositories' => [
                     $repo['everything'],
                 ],
@@ -378,6 +419,7 @@ class PackageSelectionTest extends TestCase
                 $packages['gamma4'],
             ],
             [
+                'minimum-stability' => 'stable',
                 'repositories' => [
                     $repo['everything'],
                 ],
@@ -389,6 +431,29 @@ class PackageSelectionTest extends TestCase
             ],
         ];
 
+        $data['Require only dependencies'] = [
+            [
+                $packages['alpha'],
+                $packages['epsilon'],
+                $packages['gamma1'],
+                $packages['gamma4'],
+            ],
+            [
+                'minimum-stability' => 'stable',
+                'repositories' => [
+                    $repo['everything'],
+                ],
+                'require' => [
+                    'vendor/project-epsilon' => '*',
+                    'vendor/project-zeta' => '*',
+                    'vendor/project-eta' => '*',
+                ],
+                'require-dependencies' => true,
+                'require-dev-dependencies' => true,
+                'only-dependencies' => true,
+            ],
+        ];
+
         $data['Traverse dependencies but not dev-dependencies'] = [
             [
                 $packages['zeta'],
@@ -396,6 +461,7 @@ class PackageSelectionTest extends TestCase
                 $packages['alpha'],
             ],
             [
+                'minimum-stability' => 'stable',
                 'repositories' => [
                     $repo['everything'],
                 ],
@@ -414,6 +480,7 @@ class PackageSelectionTest extends TestCase
                 $packages['gamma4'],
             ],
             [
+                'minimum-stability' => 'stable',
                 'repositories' => [
                     $repo['everything'],
                 ],
@@ -434,6 +501,7 @@ class PackageSelectionTest extends TestCase
                 $packages['alpha'],
             ],
             [
+                'minimum-stability' => 'stable',
                 'repositories' => [
                     $repo['gamma'],
                     $repo['delta'],
@@ -445,18 +513,34 @@ class PackageSelectionTest extends TestCase
             ],
         ];
 
+        $data['Set minimum-stability for a specific package'] = [
+            [
+                $packages['alpha'],
+                $packages['alpha-dev'],
+                $packages['beta'],
+            ],
+            [
+                'minimum-stability' => 'stable',
+                'minimum-stability-per-package' => [
+                    'vendor/project-alpha' => 'dev',
+                ],
+                'repositories' => [
+                    $repo['everything'],
+                ],
+                'require' => [
+                    'vendor/project-alpha' => '*',
+                    'vendor/project-beta' => '*',
+                ],
+            ],
+        ];
+
         return $data;
     }
 
     /**
      * @dataProvider dataSelect
-     *
-     * @param array $expected
-     * @param array $config
-     * @param string $filterRepo
-     * @param array $filterPackages
      */
-    public function testSelect($expected, $config, $filterRepo = null, $filterPackages = null)
+    public function testSelect(array $expected, array $config, ?string $filterRepo = null, ?array $filterPackages = null)
     {
         unset(Config::$defaultRepositories['packagist'], Config::$defaultRepositories['packagist.org']);
 
@@ -479,10 +563,7 @@ class PackageSelectionTest extends TestCase
         $this->assertEquals($expected, \array_keys($selected->getValue($selection)));
     }
 
-    /**
-     * @return array
-     */
-    public function dataClean()
+    public function dataClean(): array
     {
         $packages = [
             'alpha' => [
@@ -653,12 +734,8 @@ class PackageSelectionTest extends TestCase
 
     /**
      * @dataProvider dataClean
-     *
-     * @param array $expected
-     * @param array $config
-     * @param array $packages
      */
-    public function testClean($expected, $config, $packages)
+    public function testClean(array $expected, array $config, array $packages)
     {
         $selection = new PackageSelection(new NullOutput(), 'build', $config, false);
         $selectionRef = new \ReflectionClass(\get_class($selection));
@@ -688,5 +765,54 @@ class PackageSelectionTest extends TestCase
         }
 
         $this->assertEquals($expected, $sources);
+    }
+
+    public function testOnlyBestCandidates()
+    {
+        $pool = new Pool();
+        $repository = new ArrayRepository();
+
+        $packageA0 = new Package('vendor/a', '1.0.0.0', '1.0');
+        $packageA1 = new Package('vendor/a', '1.1.0.0', '1.1');
+        $packageB0 = new Package('vendor/b', '1.0.0.0', '1.0');
+        $packageB1 = new Package('vendor/b', '1.1.0.0', '1.1');
+        $packageB2 = new Package('vendor/b', '1.2.0.0', '1.2');
+        $packageC0 = new Package('vendor/c', '1.0.0.0', '1.0');
+        $packageC1 = new Package('vendor/c', '1.1.0.0', '1.1');
+
+        $constraint1 = new Constraint('=', '1.1');
+        $link1 = new Link('vendor/a', 'vendor/b', $constraint1);
+        $packageA0->setRequires([$link1]);
+
+        $constraint2 = new Constraint('<=', '1.1');
+        $link2 = new Link('vendor/b', 'vendor/c', $constraint2);
+        $packageB1->setRequires([$link2]);
+
+        $repository->addPackage($packageA0);
+        $repository->addPackage($packageA1);
+        $repository->addPackage($packageB0);
+        $repository->addPackage($packageB1);
+        $repository->addPackage($packageB2);
+        $repository->addPackage($packageC0);
+        $repository->addPackage($packageC1);
+        $pool->addRepository($repository);
+
+        $rootConstraint = new Constraint('=', '1.0');
+        $rootLink = new Link('top', 'vendor/a', $rootConstraint);
+
+        $config = [
+          'only-best-candidates' => TRUE,
+          'require-dependencies' => TRUE,
+        ];
+        $builder = new PackageSelection(new NullOutput(), 'build', $config, false);
+        $reflection = new \ReflectionClass(get_class($builder));
+        $method = $reflection->getMethod('selectLinks');
+        $method->setAccessible(true);
+        $method->invokeArgs($builder, [$pool, [$rootLink], FALSE, FALSE]);
+
+        $property = $reflection->getProperty('selected');
+        $property->setAccessible(true);
+
+        $this->assertEquals(array_values([$packageA0, $packageB1, $packageC1]), array_values($property->getValue($builder)));
     }
 }

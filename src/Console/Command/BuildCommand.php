@@ -32,9 +32,6 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
-/**
- * @author Jordi Boggiano <j.boggiano@seld.be>
- */
 class BuildCommand extends BaseCommand
 {
     protected function configure()
@@ -78,6 +75,8 @@ The json config file accepts the following keys:
   requirements' dependencies.
 - <info>"require-dev-dependencies"</info>: works like require-dependencies
   but requires dev requirements rather than regular ones.
+- <info>"only-dependencies"</info>: only require dependencies - choose this if you want to build
+  a mirror of your project's dependencies without building packages for the main project repositories.
 - <info>"config"</info>: all config options from composer, see
   http://getcomposer.org/doc/04-schema.md#config
 - <info>"strip-hosts"</info>: boolean or an array of domains, IPs, CIDR notations, '/local' (=localnet and other reserved)
@@ -92,6 +91,7 @@ The json config file accepts the following keys:
   building the html output.
 - <info>"abandoned"</info>: Packages that are abandoned. As the key use the
   package name, as the value use true or the replacement package.
+- <info>"blacklist"</info>: Packages and versions which should be excluded from the final package list.
 - <info>"notify-batch"</info>: Allows you to specify a URL that will
   be called every time a user installs a package, see
   https://getcomposer.org/doc/05-repositories.md#notify-batch
@@ -103,16 +103,11 @@ EOT
     }
 
     /**
-     * @param InputInterface  $input  The input instance
-     * @param OutputInterface $output The output instance
-     *
      * @throws JsonValidationException
      * @throws ParsingException
      * @throws \Exception
-     *
-     * @return int
      */
-    protected function execute(InputInterface $input, OutputInterface $output)
+    protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $verbose = $input->getOption('verbose');
         $configFile = $input->getArgument('file');
@@ -221,10 +216,7 @@ EOT
         return 0;
     }
 
-    /**
-     * @return Config
-     */
-    private function getConfiguration()
+    private function getConfiguration(): Config
     {
         $config = new Config();
 
@@ -241,12 +233,7 @@ EOT
         return $config;
     }
 
-    /**
-     * @throws \RuntimeException
-     *
-     * @return string
-     */
-    private function getComposerHome()
+    private function getComposerHome(): string
     {
         $home = getenv('COMPOSER_HOME');
         if (!$home) {
@@ -267,17 +254,10 @@ EOT
     }
 
     /**
-     * Validates the syntax and the schema of the current config json file
-     * according to satis-schema.json rules.
-     *
-     * @param string $configFile The json file to use
-     *
      * @throws ParsingException        if the json file has an invalid syntax
      * @throws JsonValidationException if the json file doesn't match the schema
-     *
-     * @return bool true on success
      */
-    private function check($configFile)
+    private function check(string $configFile): bool
     {
         $content = file_get_contents($configFile);
 
@@ -300,6 +280,7 @@ EOT
                 foreach ((array) $validator->getErrors() as $error) {
                     $errors[] = ($error['property'] ? $error['property'] . ' : ' : '') . $error['message'];
                 }
+
                 throw new JsonValidationException('The json config file does not match the expected JSON schema', $errors);
             }
 

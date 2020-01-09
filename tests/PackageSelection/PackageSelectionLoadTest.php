@@ -39,7 +39,7 @@ class PackageSelectionLoadTest extends TestCase
     /** @var vfsStreamDirectory */
     protected $root;
 
-    protected function setUp()
+    protected function setUp(): void
     {
         static $extra = [
             'branch-alias' => [
@@ -55,14 +55,22 @@ class PackageSelectionLoadTest extends TestCase
 
         $this->root = $this->setFileSystem();
 
-        $this->selection = new PackageSelection(new NullOutput(), vfsStream::url('build'), [
-            'repositories' => [['type' => 'composer', 'url' => 'http://localhost:54715']],
-            'require' => ['vendor/name' => '*'],
-        ], false);
+        $this->selection = new PackageSelection(
+            new NullOutput(),
+            vfsStream::url('build'),
+            [
+                'repositories' => [
+                    ['type' => 'composer', 'url' => 'http://localhost:54715']
+                ],
+                'require' => ['vendor/name' => '*'],
+            ],
+            false
+        );
+
         $this->selection->setPackagesFilter(['vendor/name']);
     }
 
-    protected function setFileSystem()
+    protected function setFileSystem(): vfsStreamDirectory
     {
         vfsStreamWrapper::register();
         $root = vfsStream::newDirectory('build');

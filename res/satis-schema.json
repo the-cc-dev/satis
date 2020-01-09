@@ -102,12 +102,31 @@
             "description": "The minimum stability the packages must have to be install-able. Possible values are: dev, alpha, beta, RC, stable.",
             "enum": [ "dev", "alpha", "beta", "rc", "RC", "stable" ]
         },
+        "minimum-stability-per-package": {
+            "type": "object",
+            "description": "This is a hash of package name (keys) and minimum stability (values).",
+            "minProperties": 1,
+            "additionalProperties": {
+                "type": "string",
+                "description": "The minimum stability the package must have to be install-able. Possible values are: dev, alpha, beta, RC, stable. This overrides the \"minimum-stability\" global option for the specified package.",
+                "enum": [ "dev", "alpha", "beta", "rc", "RC", "stable" ]
+            }
+        },
         "abandoned": {
             "type": "object",
             "description": "List of packages marked as abandoned for this repository, the mark can be boolean or a package name/URL pointing to a recommended alternative.",
             "additionalProperties": {
                 "type": ["boolean", "string"],
                 "description": "A valid Package name"
+            }
+        },
+        "blacklist": {
+            "type": "object",
+            "description": "This is a hash of package name (keys) and version constraints (values) to exclude after selecting packages.",
+            "minProperties": 1,
+            "additionalProperties": {
+                "type": "string",
+                "description": "A valid version constraint"
             }
         },
         "require-all": {
@@ -121,6 +140,14 @@
         "require-dev-dependencies": {
             "type": "boolean",
             "description": "If true, resolve and add all Dev dependencies of each required package."
+        },
+        "only-dependencies": {
+            "type": "boolean",
+            "description": "If true, will not require the root dependencies only their dependencies."
+        },
+        "only-best-candidates": {
+            "type": "boolean",
+            "description": "If true, will only resolve best candidates amongst dependencies."
         },
         "require-dependency-filter": {
             "type": "boolean",

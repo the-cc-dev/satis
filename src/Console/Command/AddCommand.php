@@ -21,11 +21,9 @@ use Composer\Repository\VcsRepository;
 use Symfony\Component\Console\Helper\FormatterHelper;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
-/**
- * @author Sergey Kolodyazhnyy <sergey.kolodyazhnyy@gmail.com>
- */
 class AddCommand extends BaseCommand
 {
     protected function configure()
@@ -36,6 +34,8 @@ class AddCommand extends BaseCommand
             ->setDefinition([
                 new InputArgument('url', InputArgument::REQUIRED, 'VCS repository URL'),
                 new InputArgument('file', InputArgument::OPTIONAL, 'JSON file to use', './satis.json'),
+                new InputOption('type', null, InputOption::VALUE_OPTIONAL, 'VCS driver (see https://getcomposer.org/doc/05-repositories.md#git-alternatives)', 'vcs'),
+                new InputOption('name', null, InputOption::VALUE_OPTIONAL, 'The name of the repository, will be added to satis.json', null),
             ])
             ->setHelp(<<<'EOT'
 The <info>add</info> command adds given repository URL to the json file
@@ -46,19 +46,15 @@ EOT
         ;
     }
 
-    /**
-     * @param InputInterface  $input  The input instance
-     * @param OutputInterface $output The output instance
-     *
-     * @return int
-     */
-    protected function execute(InputInterface $input, OutputInterface $output)
+    protected function execute(InputInterface $input, OutputInterface $output): int
     {
         /** @var FormatterHelper $formatter */
         $formatter = $this->getHelper('formatter');
 
         $configFile = $input->getArgument('file');
         $repositoryUrl = $input->getArgument('url');
+        $vcsDriver = $input->getOption('type');
+        $repositoryName = $input->getOption('name');
 
         if (preg_match('{^https?://}i', $configFile)) {
             $output->writeln('<error>Unable to write to remote file ' . $configFile . '</error>');
@@ -73,7 +69,7 @@ EOT
             return 1;
         }
 
-        if (!$this->isRepositoryValid($repositoryUrl)) {
+        if (!$this->isRepositoryValid($repositoryUrl, $vcsDriver)) {
             $output->writeln('<error>Invalid Repository URL: ' . $repositoryUrl . '</error>');
 
             return 3;
@@ -86,13 +82,25 @@ EOT
 
         foreach ($config['repositories'] as $repository) {
             if (isset($repository['url']) && $repository['url'] == $repositoryUrl) {
-                $output->writeln('<error>Repository already added to the file</error>');
+                $output->writeln('<error>Repository url already added to the file</error>');
 
                 return 4;
             }
+
+            if (isset($repository['name']) && $repository['name'] == $repositoryName) {
+                $output->writeln('<error>Repository name already added to the file</error>');
+
+                return 5;
+            }
         }
 
-        $config['repositories'][] = ['type' => 'vcs', 'url' => $repositoryUrl];
+        $repositoryConfig = ['type' => $vcsDriver, 'url' => $repositoryUrl];
+
+        if (!empty($repositoryName)) {
+            $repositoryConfig['name'] = $repositoryName;
+        }
+
+        $config['repositories'][] = $repositoryConfig;
 
         $file->write($config);
 
@@ -105,19 +113,12 @@ EOT
         return 0;
     }
 
-    /**
-     * Validate repository URL
-     *
-     * @param $repositoryUrl
-     *
-     * @return bool
-     */
-    protected function isRepositoryValid($repositoryUrl)
+    protected function isRepositoryValid(string $repositoryUrl, string $type): bool
     {
         $io = new NullIO();
         $config = Factory::createConfig();
         $io->loadConfiguration($config);
-        $repository = new VcsRepository(['url' => $repositoryUrl], $io, $config);
+        $repository = new VcsRepository(['url' => $repositoryUrl, 'type' => $type], $io, $config);
 
         if (!($driver = $repository->getDriver())) {
             return false;

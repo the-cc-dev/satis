@@ -9,7 +9,7 @@ Simple static Composer repository generator.
 ## Run from source
 
 - Install satis: `composer create-project composer/satis:dev-master`
-- Build a repository: `php bin/satis build <configuration-file> <output-dir>`
+- Build a repository: `php bin/satis build <configuration-file> <output-directory>`
 
 Read the more detailed instructions in the [documentation][].
 
@@ -26,10 +26,10 @@ Run the image (with Composer cache from host):
 
 ``` sh
 docker run --rm --init -it \
-  -u $(id -u):$(id -g) \
-  -v $(pwd)/build:/build \
-  -v "${COMPOSER_HOME:-$HOME/.composer}:/composer" \
-  composer/satis
+  --user $(id -u):$(id -g) \
+  --volume $(pwd):/build \
+  --volume "${COMPOSER_HOME:-$HOME/.composer}:/composer" \
+  composer/satis build <configuration-file> <output-directory>
 ```
 
 If you want to run the image without implicitly running Satis, you have to
@@ -68,6 +68,8 @@ By participating in this project you agree to abide by its terms.
 
 Fork the project, create a feature branch, and send us a pull request.
 
+If you introduce a new feature, or fix a bug, please try to include a testcase.
+
 
 ## Authors
 
@@ -85,6 +87,11 @@ See the list of [contributors][] who participate(d) in this project.
     (satis.json) "require" key on the basis of the project composer.json.
 
 
+## Examples
+
+- [eventum/composer] - A simple static set of packages hosted in GitHub Pages
+
+
 ## License
 
 Satis is licensed under the MIT License - see the [LICENSE][] file for details
@@ -98,3 +105,4 @@ Satis is licensed under the MIT License - see the [LICENSE][] file for details
 [satis-control-panel]: https://github.com/realshadow/satis-control-panel
 [composer-satis-builder]: https://github.com/AOEpeople/composer-satis-builder
 [LICENSE]: https://github.com/composer/satis/blob/master/LICENSE
+[eventum/composer]: https://github.com/eventum/composer
